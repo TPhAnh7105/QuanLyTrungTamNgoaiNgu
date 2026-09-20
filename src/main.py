@@ -8,6 +8,7 @@ from loguru import logger
 from src.api.middlewares.error_handler import global_exception_handler
 from src.domain.entities.course import Course
 from src.domain.entities.student import Student
+from src.domain.entities.teacher import Teacher
 from src.domain.entities.user import User
 from src.domain.exceptions.base import DomainException
 from src.infrastructure.database.connection import Base, engine
@@ -77,3 +78,9 @@ async def add_correlation_id_and_timing_middleware(request: Request, call_next):
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Smart Language Center Management System API"}
+
+from src.api.controllers import courses, students, teachers
+
+app.include_router(courses.router, prefix="/api/v1")
+app.include_router(students.router, prefix="/api/v1")
+app.include_router(teachers.router, prefix="/api/v1")

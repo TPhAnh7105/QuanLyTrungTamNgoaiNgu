@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
 
 class CourseBase(BaseModel):
     name: str = Field(..., min_length=3, max_length=150)
@@ -12,9 +13,15 @@ class CourseBase(BaseModel):
 class CreateCourseDto(CourseBase):
     pass
 
+class UpdateCourseDto(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=150)
+    level: Optional[str] = Field(None, pattern="^(A1|A2|B1|B2|C1|C2)$")
+    fee: Optional[Decimal] = Field(None, gt=0)
+    max_capacity: Optional[int] = Field(None, gt=0)
+    is_active: Optional[int] = Field(None, ge=0, le=1)
+
 class CourseResponseDto(CourseBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

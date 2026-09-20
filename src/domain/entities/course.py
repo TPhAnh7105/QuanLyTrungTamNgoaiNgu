@@ -1,5 +1,4 @@
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DECIMAL, DateTime
 from src.infrastructure.database.connection import Base
 
@@ -12,4 +11,5 @@ class Course(Base):
     fee = Column(DECIMAL, nullable=False)
     max_capacity = Column(Integer, nullable=False)
     is_active = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    is_deleted = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

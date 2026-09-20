@@ -1,6 +1,4 @@
-from datetime import datetime
-from decimal import Decimal
-from typing import Optional
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DECIMAL, ForeignKey, DateTime
 from src.infrastructure.database.connection import Base
 
@@ -16,4 +14,5 @@ class Student(Base):
     absence_rate = Column(DECIMAL, default=0.0)
     motivation_score = Column(Integer, default=0)
     parental_support = Column(String, default="Medium")  # Low/Medium/High
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_deleted = Column(Integer, default=0)

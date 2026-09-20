@@ -28,13 +28,14 @@ Base = declarative_base()
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency to provide a database session for each request.
+    Repositories are responsible for calling commit() themselves.
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
         finally:
             await session.close()
+
