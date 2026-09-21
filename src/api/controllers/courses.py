@@ -1,20 +1,27 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import math
+
 from src.infrastructure.database.connection import get_db_session
 from src.application.dtos.course import CreateCourseDto, UpdateCourseDto, CourseResponseDto
 from src.application.dtos.pagination import PaginatedResponse
 from src.infrastructure.repositories.course_repository import CourseRepository
 from src.domain.exceptions.base import DomainException
-import math
+from src.domain.entities.user import User
+from src.api.dependencies import require_roles
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
 @router.post("/", response_model=CourseResponseDto, status_code=status.HTTP_201_CREATED)
 async def create_course(
     dto: CreateCourseDto, 
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Tạo khóa học mới (Yêu cầu quyền: Admin).
+    """
     repo = CourseRepository(db)
     course = await repo.create(dto.model_dump())
     return course
@@ -24,6 +31,9 @@ async def get_course(
     id: int, 
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Xem chi tiết khóa học theo ID.
+    """
     repo = CourseRepository(db)
     course = await repo.get_by_id(id)
     if not course:
@@ -41,9 +51,11 @@ async def list_courses(
     is_active: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Lấy danh sách khóa học có phân trang, lọc nâng cao và sắp xếp.
+    """
     repo = CourseRepository(db)
     filters = {"name": name, "level": level, "is_active": is_active}
-    # Remove None values
     filters = {k: v for k, v in filters.items() if v is not None}
     
     items, total = await repo.get_paginated(
@@ -68,8 +80,12 @@ async def list_courses(
 async def update_course(
     id: int,
     dto: UpdateCourseDto,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Cập nhật khóa học (Yêu cầu quyền: Admin).
+    """
     repo = CourseRepository(db)
     course = await repo.update(id, dto.model_dump(exclude_unset=True))
     return course
@@ -77,7 +93,11 @@ async def update_course(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_course(
     id: int,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Xóa mềm khóa học (Yêu cầu quyền: Admin).
+    """
     repo = CourseRepository(db)
     await repo.soft_delete(id)

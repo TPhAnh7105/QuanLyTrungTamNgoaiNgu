@@ -1,0 +1,25 @@
+# Environment & Secrets
+.env
+
+# Plan files
+MasterPlan.xlsx
+plan.txt
+
+# JSON files
+*.json
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+*.sqlite3
+
+# Virtual environments
+venv/
+.venv/
+env/

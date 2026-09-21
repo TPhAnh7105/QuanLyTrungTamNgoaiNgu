@@ -1,20 +1,27 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import math
+
 from src.infrastructure.database.connection import get_db_session
 from src.application.dtos.student import CreateStudentDto, UpdateStudentDto, StudentResponseDto
 from src.application.dtos.pagination import PaginatedResponse
 from src.infrastructure.repositories.student_repository import StudentRepository
 from src.domain.exceptions.base import DomainException
-import math
+from src.domain.entities.user import User
+from src.api.dependencies import require_roles
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
 @router.post("/", response_model=StudentResponseDto, status_code=status.HTTP_201_CREATED)
 async def create_student(
     dto: CreateStudentDto, 
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin", "Teacher"]))
 ):
+    """
+    Tạo hồ sơ học viên mới (Yêu cầu quyền: Admin hoặc Teacher).
+    """
     repo = StudentRepository(db)
     student = await repo.create(dto.model_dump())
     return student
@@ -24,6 +31,9 @@ async def get_student(
     id: int, 
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Xem chi tiết hồ sơ học viên theo ID.
+    """
     repo = StudentRepository(db)
     student = await repo.get_by_id(id)
     if not student:
@@ -41,6 +51,9 @@ async def list_students(
     parental_support: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Lấy danh sách học viên có phân trang, lọc và sắp xếp.
+    """
     repo = StudentRepository(db)
     filters = {"full_name": full_name, "phone": phone, "parental_support": parental_support}
     filters = {k: v for k, v in filters.items() if v is not None}
@@ -67,8 +80,12 @@ async def list_students(
 async def update_student(
     id: int,
     dto: UpdateStudentDto,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin", "Teacher", "Student"]))
 ):
+    """
+    Cập nhật thông tin học viên (Yêu cầu quyền: Admin, Teacher hoặc chính Student).
+    """
     repo = StudentRepository(db)
     student = await repo.update(id, dto.model_dump(exclude_unset=True))
     return student
@@ -76,7 +93,11 @@ async def update_student(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_student(
     id: int,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Xóa mềm học viên (Yêu cầu quyền: Admin).
+    """
     repo = StudentRepository(db)
     await repo.soft_delete(id)

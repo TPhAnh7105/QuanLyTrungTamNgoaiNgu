@@ -37,8 +37,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Exception handlers
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy.exc import IntegrityError
+
+# Exception handlers (RFC 7807)
 app.add_exception_handler(DomainException, global_exception_handler)
+app.add_exception_handler(IntegrityError, global_exception_handler)
+app.add_exception_handler(StarletteHTTPException, global_exception_handler)
+app.add_exception_handler(RequestValidationError, global_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 
 
@@ -79,8 +86,9 @@ async def add_correlation_id_and_timing_middleware(request: Request, call_next):
 async def root():
     return {"message": "Welcome to the Smart Language Center Management System API"}
 
-from src.api.controllers import courses, students, teachers
+from src.api.controllers import auth, courses, students, teachers
 
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(students.router, prefix="/api/v1")
 app.include_router(teachers.router, prefix="/api/v1")

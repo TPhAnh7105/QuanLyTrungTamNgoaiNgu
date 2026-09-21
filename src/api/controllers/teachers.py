@@ -1,20 +1,27 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import math
+
 from src.infrastructure.database.connection import get_db_session
 from src.application.dtos.teacher import CreateTeacherDto, UpdateTeacherDto, TeacherResponseDto
 from src.application.dtos.pagination import PaginatedResponse
 from src.infrastructure.repositories.teacher_repository import TeacherRepository
 from src.domain.exceptions.base import DomainException
-import math
+from src.domain.entities.user import User
+from src.api.dependencies import require_roles
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
 @router.post("/", response_model=TeacherResponseDto, status_code=status.HTTP_201_CREATED)
 async def create_teacher(
     dto: CreateTeacherDto, 
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Tạo hồ sơ giáo viên mới (Yêu cầu quyền: Admin).
+    """
     repo = TeacherRepository(db)
     teacher = await repo.create(dto.model_dump())
     return teacher
@@ -24,6 +31,9 @@ async def get_teacher(
     id: int, 
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Xem chi tiết thông tin giáo viên theo ID.
+    """
     repo = TeacherRepository(db)
     teacher = await repo.get_by_id(id)
     if not teacher:
@@ -40,6 +50,9 @@ async def list_teachers(
     specialization: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db_session)
 ):
+    """
+    Lấy danh sách giáo viên có phân trang, lọc và sắp xếp.
+    """
     repo = TeacherRepository(db)
     filters = {"full_name": full_name, "specialization": specialization}
     filters = {k: v for k, v in filters.items() if v is not None}
@@ -66,8 +79,12 @@ async def list_teachers(
 async def update_teacher(
     id: int,
     dto: UpdateTeacherDto,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin", "Teacher"]))
 ):
+    """
+    Cập nhật thông tin giáo viên (Yêu cầu quyền: Admin hoặc Teacher).
+    """
     repo = TeacherRepository(db)
     teacher = await repo.update(id, dto.model_dump(exclude_unset=True))
     return teacher
@@ -75,7 +92,11 @@ async def update_teacher(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_teacher(
     id: int,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles(["Admin"]))
 ):
+    """
+    Xóa mềm giáo viên (Yêu cầu quyền: Admin).
+    """
     repo = TeacherRepository(db)
     await repo.soft_delete(id)
