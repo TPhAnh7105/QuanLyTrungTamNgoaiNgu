@@ -21,15 +21,18 @@ router = APIRouter(prefix="/enrollments", tags=["Enrollments (ACID Transactions)
 
 @router.post("/", response_model=EnrollmentResultDto, status_code=status.HTTP_201_CREATED)
 async def enroll_student(
-    dto: CreateEnrollmentDto, 
+    student_id: int = Query(..., description="ID của học viên"),
+    course_id: int = Query(..., description="ID của khóa học"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles(["Admin", "Teacher"]))
 ):
     """
     Ghi danh học viên vào khóa học (ACID Transaction).
+    Sử dụng Query Parameters thay vì Body.
     Tự động: Khóa khóa học -> Kiểm tra sĩ số -> Tạo Ghi danh -> Sinh Hóa đơn -> Commit.
     Yêu cầu quyền: Admin hoặc Teacher.
     """
+    dto = CreateEnrollmentDto(student_id=student_id, course_id=course_id)
     service = EnrollmentService(db)
     result = await service.enroll_student_transaction(dto)
     return result
@@ -87,7 +90,7 @@ async def list_enrollments(
 @router.put("/{id}/status", response_model=EnrollmentResponseDto)
 async def update_enrollment_status(
     id: int,
-    dto: UpdateEnrollmentStatusDto,
+    status: str = Query(..., description="Trạng thái: Active, Completed, Dropped"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles(["Admin", "Teacher"]))
 ):
@@ -95,6 +98,7 @@ async def update_enrollment_status(
     Cập nhật trạng thái ghi danh (Active, Completed, Dropped).
     Yêu cầu quyền: Admin hoặc Teacher.
     """
+    dto = UpdateEnrollmentStatusDto(status=status)
     repo = EnrollmentRepository(db)
     enrollment = await repo.update(id, {"status": dto.status})
     if not enrollment:
