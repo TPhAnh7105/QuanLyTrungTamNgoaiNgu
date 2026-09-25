@@ -1,33 +1,34 @@
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Header, Query, status
+from sqlalchemy import text
 from typing import Optional
+from datetime import datetime, timezone
 import math
 
-from src.infrastructure.database.connection import get_db_session
+from src.infrastructure.database.connection import AsyncSessionLocal
 from src.application.dtos.invoice import InvoiceResponseDto, PayInvoiceResponseDto
 from src.application.dtos.pagination import PaginatedResponse
-from src.application.services.invoice_service import InvoiceService
-from src.infrastructure.repositories.invoice_repository import InvoiceRepository
 from src.domain.exceptions.base import DomainException
-from src.domain.entities.user import User
-from src.api.dependencies import require_roles, get_current_user
+from src.api.auth_helper import verify_auth_sql
 
-router = APIRouter(prefix="/invoices", tags=["Invoices (Hóa đơn Học phí)"])
+router = APIRouter(prefix="/invoices", tags=["Invoices (Direct SQL Queries)"])
 
 @router.get("/{id}", response_model=InvoiceResponseDto)
 async def get_invoice(
-    id: int, 
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user)
+    id: int,
+    authorization: Optional[str] = Header(None)
 ):
     """
-    Xem chi tiết hóa đơn theo ID.
+    Xem chi tiết hóa đơn bằng SQL Query.
     """
-    repo = InvoiceRepository(db)
-    invoice = await repo.get_by_id(id)
-    if not invoice:
-        raise DomainException(f"Invoice with ID {id} not found", status_code=404)
-    return invoice
+    await verify_auth_sql(authorization)
+
+    async with AsyncSessionLocal() as session:
+        query = text("SELECT * FROM invoices WHERE id = :id AND is_deleted = 0")
+        res = await session.execute(query, {"id": id})
+        invoice = res.mappings().first()
+        if not invoice:
+            raise DomainException(f"Invoice with ID {id} not found", status_code=404)
+        return dict(invoice)
 
 @router.get("/", response_model=PaginatedResponse[InvoiceResponseDto])
 async def list_invoices(
@@ -35,44 +36,66 @@ async def list_invoices(
     size: int = Query(20, ge=1, le=100),
     student_id: Optional[int] = Query(None),
     payment_status: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user)
+    authorization: Optional[str] = Header(None)
 ):
     """
-    Lấy danh sách hóa đơn học phí có phân trang và lọc.
+    Lấy danh sách hóa đơn bằng SQL Query.
     """
-    repo = InvoiceRepository(db)
-    filters = {"student_id": student_id, "payment_status": payment_status}
-    filters = {k: v for k, v in filters.items() if v is not None}
-    
-    items, total = await repo.get_paginated(
-        page=page, 
-        size=size, 
-        sort_by="created_at", 
-        sort_desc=True, 
-        **filters
-    )
-    
-    pages = math.ceil(total / size) if size > 0 else 0
-    
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
-    )
+    await verify_auth_sql(authorization)
+
+    async with AsyncSessionLocal() as session:
+        where_clauses = ["is_deleted = 0"]
+        params = {"limit": size, "offset": (page - 1) * size}
+
+        if student_id:
+            where_clauses.append("student_id = :student_id")
+            params["student_id"] = student_id
+        if payment_status:
+            where_clauses.append("payment_status = :payment_status")
+            params["payment_status"] = payment_status
+
+        where_sql = " AND ".join(where_clauses)
+        count_query = text(f"SELECT COUNT(*) FROM invoices WHERE {where_sql}")
+        total = (await session.execute(count_query, params)).scalar() or 0
+
+        data_query = text(f"SELECT * FROM invoices WHERE {where_sql} ORDER BY id DESC LIMIT :limit OFFSET :offset")
+        res = await session.execute(data_query, params)
+        items = [dict(row) for row in res.mappings().all()]
+
+        pages = math.ceil(total / size) if size > 0 else 0
+        return PaginatedResponse(items=items, total=total, page=page, size=size, pages=pages)
 
 @router.post("/{id}/pay", response_model=PayInvoiceResponseDto, status_code=status.HTTP_200_OK)
 async def pay_invoice(
     id: int,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles(["Admin", "Teacher"]))
+    authorization: Optional[str] = Header(None)
 ):
     """
-    Thanh toán hóa đơn học phí. Chuyển trạng thái sang 'Paid'.
-    Yêu cầu quyền: Admin hoặc Teacher.
+    Thanh toán hóa đơn học phí bằng SQL Query.
     """
-    service = InvoiceService(db)
-    result = await service.pay_invoice(id)
-    return result
+    await verify_auth_sql(authorization, required_roles=["Admin", "Teacher"])
+
+    async with AsyncSessionLocal() as session:
+        check_query = text("SELECT * FROM invoices WHERE id = :id AND is_deleted = 0")
+        res = await session.execute(check_query, {"id": id})
+        invoice = res.mappings().first()
+        if not invoice:
+            raise DomainException("Hóa đơn không tồn tại.", status_code=404)
+
+        if invoice["payment_status"] == "Paid":
+            raise DomainException("Hóa đơn này đã được thanh toán.", error_code="ALREADY_PAID", status_code=400)
+
+        now = datetime.now(timezone.utc)
+        update_query = text("UPDATE invoices SET payment_status = 'Paid', payment_date = :now WHERE id = :id AND is_deleted = 0")
+        await session.execute(update_query, {"now": now, "id": id})
+        await session.commit()
+
+        res_updated = await session.execute(check_query, {"id": id})
+        updated = res_updated.mappings().first()
+
+        return PayInvoiceResponseDto(
+            invoice_id=updated["id"],
+            amount=float(updated["amount"]),
+            payment_status=updated["payment_status"],
+            payment_date=updated["payment_date"]
+        )

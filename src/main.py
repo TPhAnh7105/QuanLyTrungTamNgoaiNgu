@@ -93,8 +93,18 @@ from src.domain.entities.student import Student
 from src.domain.entities.teacher import Teacher
 from src.domain.entities.enrollment import Enrollment
 from src.domain.entities.invoice import Invoice
+from src.domain.entities.exam import Exam
+from src.domain.entities.grade import Grade
 
-from src.api.controllers import auth, courses, students, teachers, enrollments, invoices
+from src.api.controllers import (
+    auth, 
+    courses, 
+    students, 
+    teachers, 
+    enrollments, 
+    invoices, 
+    placement_tests
+)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
@@ -102,3 +112,4 @@ app.include_router(students.router, prefix="/api/v1")
 app.include_router(teachers.router, prefix="/api/v1")
 app.include_router(enrollments.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
+app.include_router(placement_tests.router, prefix="/api/v1")
