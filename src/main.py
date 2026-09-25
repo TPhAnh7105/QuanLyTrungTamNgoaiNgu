@@ -86,9 +86,19 @@ async def add_correlation_id_and_timing_middleware(request: Request, call_next):
 async def root():
     return {"message": "Welcome to the Smart Language Center Management System API"}
 
-from src.api.controllers import auth, courses, students, teachers
+# Import entities for metadata creation
+from src.domain.entities.user import User
+from src.domain.entities.course import Course
+from src.domain.entities.student import Student
+from src.domain.entities.teacher import Teacher
+from src.domain.entities.enrollment import Enrollment
+from src.domain.entities.invoice import Invoice
+
+from src.api.controllers import auth, courses, students, teachers, enrollments, invoices
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(students.router, prefix="/api/v1")
 app.include_router(teachers.router, prefix="/api/v1")
+app.include_router(enrollments.router, prefix="/api/v1")
+app.include_router(invoices.router, prefix="/api/v1")
